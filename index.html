@@ -17,7 +17,7 @@
 
     <h2>Emulated Site</h2>
     <p>Upload a ZIP file containing an `index.html` and other assets. Once uploaded, click the link below to view the emulated site.</p>
-    <a id="emulatedLink" href="/index.html" target="_blank" style="display:none;">View Emulated Site (/index.html)</a>
+    <a id="emulatedLink" href="/fakeserver/index.html" target="_blank" style="display:none;">View Emulated Site (/index.html)</a>
 
     <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
     <script>eruda.init();</script>
@@ -33,7 +33,7 @@
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
                 // Use the absolute path '/sw.js'. This usually resolves Service Worker failures.
-                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                navigator.serviceWorker.register('/fakeserver/sw.js', { scope: '/fakeserver/' })
                     .then(registration => {
                         console.log('SW registered:', registration.scope);
                         // Update status to confirm success
