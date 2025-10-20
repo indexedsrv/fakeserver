@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>ZIP Site Emulator</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        #status { font-weight: bold; color: blue; }
+        .success { color: green !important; }
+        .error { color: red !important; }
+    </style>
+</head>
+<body>
+    <h1>Upload ZIP to Emulate Site</h1>
+    <input type="file" id="zipUploader" accept=".zip">
+    <p id="status">Ready. Upload a **.zip** file.</p>
+
+    <h2>Emulated Site</h2>
+    <p>Upload a ZIP file containing an `index.html` and other assets. Once uploaded, click the link below to view the emulated site.</p>
+    <a id="emulatedLink" href="/index.html" target="_blank" style="display:none;">View Emulated Site (/index.html)</a>
+
+    <script src="https://unpkg.com/@zip.js/zip.js@2.7.20/dist/zip.min.js"></script> 
+    
+    <script>
+        const statusEl = document.getElementById('status');
+        const emulatedLink = document.getElementById('emulatedLink');
+        const CACHE_NAME = 'zip-emulation-cache';
+
+        // 1. Service Worker Registration
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js', { scope: '/' })
+                    .then(registration => {
+                        console.log('SW registered:', registration.scope);
+                    })
+                    .catch(error => {
+                        statusEl.textContent = 'SW registration failed!';
+                        console.error('SW registration failed:', error);
+                    });
+            });
+        } else {
+            statusEl.textContent = 'Your browser does not support Service Workers.';
+        }
+
+        // 2. Handle File Upload and Unzip (Main Thread)
+        document.getElementById('zipUploader').addEventListener('change', async (event) => {
+            const file = event.target.files[0];
+            if (!file || !file.name.endsWith('.zip')) {
+                statusEl.textContent = 'Please select a valid .zip file.';
+                statusEl.className = 'error';
+                return;
+            }
+
+            statusEl.textContent = `Processing "${file.name}"... Unzipping and sending to Service Worker.`;
+            statusEl.className = '';
+
+            try {
+                // zip.js API usage: Reader to read the file
+                const reader = new zip.ZipReader(new zip.BlobReader(file));
+                const entries = await reader.getEntries();
+                
+                const filesToCache = [];
+
+                // Extract each file
+                for (const entry of entries) {
+                    // Skip directories
+                    if (entry.directory) continue;
+
+                    // Read the file as a Blob
+                    const blob = await entry.getData(new zip.BlobWriter());
+                    
+                    // Normalize the path (must start with / for the Service Worker fetch)
+                    const path = '/' + entry.filename.replace(/\\/g, '/'); 
+
+                    filesToCache.push({ 
+                        path: path, 
+                        blob: blob 
+                    });
+                }
+                
+                await reader.close();
+                
+                if (filesToCache.length === 0) {
+                    statusEl.textContent = 'ZIP file was empty.';
+                    statusEl.className = 'error';
+                    return;
+                }
+
+                // 3. Post Message to Service Worker
+                const registration = await navigator.serviceWorker.ready;
+                registration.active.postMessage({
+                    type: 'CACHE_ZIP_FILES',
+                    files: filesToCache
+                });
+
+                statusEl.textContent = `Successfully extracted ${filesToCache.length} files. Waiting for Service Worker confirmation...`;
+                statusEl.className = 'success';
+                emulatedLink.style.display = 'inline';
+
+            } catch (error) {
+                statusEl.textContent = 'Error processing ZIP file. See console.';
+                statusEl.className = 'error';
+                console.error('ZIP Processing Error:', error);
+            }
+        });
+
+        // 4. Handle confirmation message from Service Worker
+        navigator.serviceWorker.addEventListener('message', event => {
+            if (event.data && event.data.type === 'CACHE_COMPLETE') {
+                statusEl.textContent = event.data.message;
+                statusEl.className = 'success';
+            }
+        });
+    </script>
+</body>
+</html>
