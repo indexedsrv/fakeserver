@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ZIP Site Emulator</title>
+    <title>ZIP Site Emulator with Eruda</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         #status { font-weight: bold; color: blue; }
@@ -19,6 +19,9 @@
     <p>Upload a ZIP file containing an `index.html` and other assets. Once uploaded, click the link below to view the emulated site.</p>
     <a id="emulatedLink" href="/index.html" target="_blank" style="display:none;">View Emulated Site (/index.html)</a>
 
+    <script src="https://cdn.jsdelivr.net/npm/eruda"></script>
+    <script>eruda.init();</script>
+
     <script src="https://unpkg.com/@zip.js/zip.js@2.7.20/dist/zip.min.js"></script> 
     
     <script>
@@ -26,15 +29,23 @@
         const emulatedLink = document.getElementById('emulatedLink');
         const CACHE_NAME = 'zip-emulation-cache';
 
-        // 1. Service Worker Registration
+        // 3. Service Worker Registration (Crucial Path Fix!)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
+                // Use the absolute path '/sw.js'. This usually resolves Service Worker failures.
                 navigator.serviceWorker.register('/sw.js', { scope: '/' })
                     .then(registration => {
                         console.log('SW registered:', registration.scope);
+                        // Update status to confirm success
+                        if (statusEl.textContent.includes("SW registration failed!")) {
+                             statusEl.textContent = 'Ready. Upload a .zip file. (SW registered now)';
+                             statusEl.className = '';
+                        }
                     })
                     .catch(error => {
-                        statusEl.textContent = 'SW registration failed!';
+                        // The Eruda console will show this error clearly
+                        statusEl.textContent = 'SW registration failed! Check Eruda/DevTools console.';
+                        statusEl.className = 'error';
                         console.error('SW registration failed:', error);
                     });
             });
@@ -42,7 +53,7 @@
             statusEl.textContent = 'Your browser does not support Service Workers.';
         }
 
-        // 2. Handle File Upload and Unzip (Main Thread)
+        // 4. Handle File Upload and Unzip (same as before)
         document.getElementById('zipUploader').addEventListener('change', async (event) => {
             const file = event.target.files[0];
             if (!file || !file.name.endsWith('.zip')) {
@@ -55,21 +66,16 @@
             statusEl.className = '';
 
             try {
-                // zip.js API usage: Reader to read the file
                 const reader = new zip.ZipReader(new zip.BlobReader(file));
                 const entries = await reader.getEntries();
                 
                 const filesToCache = [];
 
-                // Extract each file
                 for (const entry of entries) {
-                    // Skip directories
                     if (entry.directory) continue;
 
-                    // Read the file as a Blob
                     const blob = await entry.getData(new zip.BlobWriter());
-                    
-                    // Normalize the path (must start with / for the Service Worker fetch)
+                    // Normalize the path
                     const path = '/' + entry.filename.replace(/\\/g, '/'); 
 
                     filesToCache.push({ 
@@ -86,7 +92,6 @@
                     return;
                 }
 
-                // 3. Post Message to Service Worker
                 const registration = await navigator.serviceWorker.ready;
                 registration.active.postMessage({
                     type: 'CACHE_ZIP_FILES',
@@ -98,13 +103,13 @@
                 emulatedLink.style.display = 'inline';
 
             } catch (error) {
-                statusEl.textContent = 'Error processing ZIP file. See console.';
+                statusEl.textContent = 'Error processing ZIP file. See Eruda/DevTools console.';
                 statusEl.className = 'error';
                 console.error('ZIP Processing Error:', error);
             }
         });
 
-        // 4. Handle confirmation message from Service Worker
+        // 5. Handle confirmation message from Service Worker (same as before)
         navigator.serviceWorker.addEventListener('message', event => {
             if (event.data && event.data.type === 'CACHE_COMPLETE') {
                 statusEl.textContent = event.data.message;
