@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>ZIP Site Emulator with Eruda</title>
+    <title>IndexedSrv</title>
     <style>
         body { font-family: sans-serif; padding: 20px; }
         #status { font-weight: bold; color: blue; }
@@ -29,21 +29,17 @@
         const emulatedLink = document.getElementById('emulatedLink');
         const CACHE_NAME = 'zip-emulation-cache';
 
-        // 3. Service Worker Registration (Crucial Path Fix!)
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                // Use the absolute path '/sw.js'. This usually resolves Service Worker failures.
                 navigator.serviceWorker.register('/sw.js', { scope: '/' })
                     .then(registration => {
                         console.log('SW registered:', registration.scope);
-                        // Update status to confirm success
                         if (statusEl.textContent.includes("SW registration failed!")) {
                              statusEl.textContent = 'Ready. Upload a .zip file. (SW registered now)';
                              statusEl.className = '';
                         }
                     })
                     .catch(error => {
-                        // The Eruda console will show this error clearly
                         statusEl.textContent = 'SW registration failed! Check Eruda/DevTools console.';
                         statusEl.className = 'error';
                         console.error('SW registration failed:', error);
@@ -52,8 +48,7 @@
         } else {
             statusEl.textContent = 'Your browser does not support Service Workers.';
         }
-
-        // 4. Handle File Upload and Unzip (same as before)
+        
         document.getElementById('zipUploader').addEventListener('change', async (event) => {
             const file = event.target.files[0];
             if (!file || !file.name.endsWith('.zip')) {
@@ -75,7 +70,6 @@
                     if (entry.directory) continue;
 
                     const blob = await entry.getData(new zip.BlobWriter());
-                    // Normalize the path
                     const path = '/' + entry.filename.replace(/\\/g, '/'); 
 
                     filesToCache.push({ 
@@ -109,7 +103,6 @@
             }
         });
 
-        // 5. Handle confirmation message from Service Worker (same as before)
         navigator.serviceWorker.addEventListener('message', event => {
             if (event.data && event.data.type === 'CACHE_COMPLETE') {
                 statusEl.textContent = event.data.message;
